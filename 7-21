@@ -1,0 +1,166 @@
+🧱 1. 今日推进（做了什么） 3.30小时  实战日
+
+    完成BUG修改，BUG主要是while Ture 导致主循环被抢占，导致对话框一直关闭不掉，后修改mianpy ，camera_widget结构完成BUG修复   
+    
+  需要修改 CameraWindow 类的 __init__ 方法：
+
+  def __init__(self, master, save_dir):
+      super().__init__(master)  # 只传入 master 参数
+      self.title("摄像头(按空格拍照, ESC或点X退出)")
+      self.geometry("800x650")
+
+      self.save_dir = save_dir  # 在初始化父类后再设置自定义属性
+      self.image_path = None
+
+      # 其余代码保持不变...
+
+  问题原因：
+  - tk.Toplevel.__init__() 只接受标准的 Tkinter 参数
+  - save_dir 是你的自定义参数，不能传给父类构造函数
+  - 需要先调用父类初始化，再设置自定义属性
+
+  这样修改后应该能正常运行。
+> import tkinter as tk
+  from tkinter import filedialog, messagebox
+  import cv2
+  import os
+  from datetime import datetime
+  from PIL import Image, ImageTk
+
+  from ocr_utils import ocr_image
+  from excel_utils import save_to_excel
+  from gui_utils import show_compare_window
+
+  class CameraWindow(tk.Toplevel):
+      """
+      一个Tkinter顶级窗口, 用于显示摄像头预览、拍照和返回路径。
+      """
+      def __init_(self, master, save_dir):
+          super().__init__(master)
+          self.title("摄像头(按空格拍照, ESC或点X退出)")
+          self.geometry("800x650")
+
+          self.save_dir = save_dir
+          self.image_path = None
+
+          if not os.path.exists(self.save_dir):
+              os.makedirs(self.save_dir)
+
+          self.cap = cv2.VideoCapture(0)
+          if not self.cap.isOpened():
+              messagebox.showerror("摄像头错误", "无法打开摄像头!")
+              self.destroy()
+              return
+
+          self.canvas = tk.Label(self)
+          self.canvas.pack(pady=10, padx=10)
+
+          self.bind('<space>', self.capture_image_event)
+          self.bind('<Escape>', self.close_window_event)
+          self.protocol("WM_DELETE_WINDOW", self.close_window)
+
+          self.update_frame()
+
+      def update_frame(self):
+
+          ret, frame = self.cap.read()
+          if ret:
+
+              self.current_frame_cv = frame
+              img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+              img_pil = Image.fromarray(img)
+              img_tk = ImageTk.PhotoImage(image=img_pil)
+
+              self.canvas.imgtk = img_tk
+              self.canvas.config(image=img_tk)
+
+              self.after(15, self.update_frame)
+
+              self.after(15, self.update_frame)
+          else:
+              self.close_window()
+
+      def capture_image_event(self, event=None):
+          """由空格键触发的拍照事件"""
+          print("检测到空额，拍照...")
+          filename = datetime.now().strftime('%Y%m%d_%H%M%S') + '.jpg'
+          self.image_path = os.path.join(self.save_dir, filename)
+
+          cv2.imwrite(self.image_path, self.current_frame_cv)
+          print(f"图片已保存：{self.image_path}")
+
+          self.close_window()
+
+      def close_window_event(self, event=None):
+          """由ESC键触发的关闭事件"""
+          self.close_window()
+
+      def close_window(self):
+          """统一的窗口关闭逻辑"""
+          print("关闭摄像头窗口...")
+          if self.cap.isOpened():
+              self.cap.release()
+          self.destroy()
+
+  def capture_and_recognize():
+      camera_win = CameraWindow(root, save_dir='captured')
+      root.wait_window(camera_win)
+
+      img_path = camera_win.image_path
+      if img_path:
+          text = ocr_image(img_path)
+          save_to_excel(text)
+          show_compare_window(img_path, text)
+
+  def select_and_recognize():
+      img_path = filedialog.askopenfilename(filetypes=[('Image Files', '*.jpg;*.png;*.bmp')])
+      if img_path:
+          text = ocr_image(img_path)
+          save_to_excel(text)
+          show_compare_window(img_path, text)
+
+  def capture_and_save_only():
+      camera_win = CameraWindow(root, save_dir='output')
+      root.wait_window(camera_win) # 等待摄像头窗口关闭
+
+      img_path = camera_win.image_path
+      if img_path:
+          messagebox.showinfo("成功", f"图片已保存到：\n{os.path.abspath(img_path)}")
+
+  root = tk.Tk()
+  root.title("OCR自动识别工具")
+  root.geometry("300x200")
+
+  frame = tk.Frame(root, padx=20, pady=10)
+  frame.pack(expand=True, fill=tk.BOTH)
+
+  btn_capture = tk.Button(frame, text="拍照并识别", command=capture_and_recognize)
+  btn_capture.pack(pady=5, fill=tk.X)
+
+  btn_select = tk.Button(frame, text="选择图片识别", command=select_and_recognize)
+  btn_select.pack(pady=5, fill=tk.X)
+
+  btn_capture_save = tk.Button(frame, text="拍照", command=capture_and_save_only)
+  btn_capture_save.pack(pady=5, fill=tk.X)
+
+
+  root.mainloop()
+
+
+❗ 2. 卡点 or 模糊点
+
+       需要修改 CameraWindow 类的 __init__ 方法：
+
+  def __init__(self, master, save_dir):
+      super().__init__(master)  # 只传入 master 参数
+      self.title("摄像头(按空格拍照, ESC或点X退出)")
+      self.geometry("800x650")
+
+      self.save_dir = save_dir  # 在初始化父类后再设置自定义属性
+      self.image_path = None
+
+      # 其余代码保持不变...
+
+🔁 3. 未完成 / 明日任务
+
+       项目继续，水仙花复习
